@@ -388,7 +388,7 @@ export async function syncCompany(
         existing.set(key, stored);
         toPut.push(stored);
       } catch (err) {
-        if (err instanceof ProtocolError) {
+        if (err instanceof ProtocolError || err instanceof SyntaxError) {
           rejected++;
           if (existing.delete(key)) toDelete.push(key);
           errors.push(`channel ${channel}: ${err.message}`);

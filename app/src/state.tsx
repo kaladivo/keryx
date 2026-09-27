@@ -15,14 +15,15 @@ import {
   clearPendingRecovery,
   reserveRecovery,
   putCompany,
+  updateCompany,
+  commitCompanySync,
   putItems,
-  deleteItems,
   markRead,
   deleteCompany,
   type CompanyRecord,
   type StoredItem,
 } from './lib/store';
-import { syncCompany, applyOutcomeItems } from './lib/sync';
+import { syncCompany } from './lib/sync';
 import {
   checkRelayRegistration,
   ensureRelayRegistration,
@@ -91,6 +92,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notification, setNotification] = useState<NotificationState>({ kind: 'checking' });
   const [freshTestAt, setFreshTestAt] = useState<number | null>(null);
   const itemsRef = useRef<StoredItem[]>([]);
+  const syncsInFlight = useRef(0);
   // an enable/retry self-test may still be in flight: its late arrival is the
   // same green tail, while a test from before a reload is never shown
   const sessionTestPending = useRef(false);
@@ -143,14 +145,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else if (result === 'ok') await refreshNotificationState();
   }, [refreshNotificationState]);
 
-  /** Replace the in-memory items of one origin with the post-sync state. */
-  const applyOutcome = (origin: string, existing: Map<string, StoredItem>) => {
-    itemsRef.current = applyOutcomeItems(itemsRef.current, origin, existing);
-  };
-
   /** One content reconciliation from the page (never the worker). */
   const syncCompanyNow = useCallback(
     async (origin: string) => {
+      syncsInFlight.current++;
       setSyncing(true);
       try {
         const company = await getCompany(origin);
@@ -158,11 +156,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const existing = new Map(
           itemsRef.current.filter((i) => i.origin === origin).map((i) => [i.id, i]),
         );
-        const outcome = await syncCompany(company, netFetch, existing);
-        applyOutcome(origin, existing);
-        await putCompany(outcome.company);
-        if (outcome.toPut.length > 0) await putItems(outcome.toPut);
-        if (outcome.toDelete.length > 0) await deleteItems(outcome.toDelete);
+        const outcome = await syncCompany(structuredClone(company), netFetch, existing);
+        if (!(await commitCompanySync(company, outcome.company, outcome.toPut, outcome.toDelete))) return;
+        itemsRef.current = await getAllItems();
         void heartbeatRelay(outcome.company.origin);
         const list = await getAllCompanies();
         setCompanies(list);
@@ -170,7 +166,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await refreshNotificationState();
         await pushVerifyState();
       } finally {
-        setSyncing(false);
+        setSyncing(--syncsInFlight.current > 0);
       }
     },
     [refreshNotificationState],
@@ -346,34 +342,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const actions = useMemo<AppActions>(
     () => ({
       async refreshAll() {
-        setSyncing(true);
-        try {
-          for (const company of companies) {
-            const existing = new Map(itemsRef.current.filter((i) => i.origin === company.origin).map((i) => [i.id, i]));
-            const outcome = await syncCompany(company, netFetch, existing);
-            applyOutcome(company.origin, existing);
-            await putCompany(outcome.company);
-            if (outcome.toPut.length > 0) await putItems(outcome.toPut);
-            if (outcome.toDelete.length > 0) await deleteItems(outcome.toDelete);
-            void heartbeatRelay(outcome.company.origin);
-          }
-          const list = await getAllCompanies();
-          setCompanies(list);
-          // the app-wide state may have changed (a test landed, a leg died)
-          await refreshNotificationState();
-          await pushVerifyState();
-        } finally {
-          setSyncing(false);
-        }
+        for (const company of await getAllCompanies()) await syncCompanyNow(company.origin);
       },
       syncCompanyNow,
       async toggleChannel(origin, channel, followed) {
-        const company = await getCompany(origin);
-        if (!company) return;
-        const channels = company.channels.map((c) =>
-          c.name === channel ? { ...c, followed, isNew: false } : c,
-        );
-        await putCompany({ ...company, channels });
+        await updateCompany(origin, company => ({
+          ...company,
+          channels: company.channels.map(c => c.name === channel ? { ...c, followed, isNew: false } : c),
+        }));
         // The native verify mirror is the notice gate and must never lag the
         // store: it is pushed before the transport work below, which can hang or
         // fail, so a wake-up for a just-unfollowed channel is already dropped.
@@ -427,9 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return result;
       },
       async setPrefs(origin, prefs) {
-        const company = await getCompany(origin);
-        if (!company) return;
-        await putCompany({ ...company, prefs: { ...company.prefs, ...prefs } });
+        await updateCompany(origin, company => ({ ...company, prefs: { ...company.prefs, ...prefs } }));
         setCompanies(await getAllCompanies());
       },
       async markRead(origin, feedKey, itemId, read) {
@@ -439,15 +413,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       },
       async acknowledgeLogo(origin) {
-        const company = await getCompany(origin);
-        if (!company) return;
-        const logo = company.targets.signed.custom?.logo;
-        const logoSHA256 = company.targets.signed.custom?.logo_sha256;
-        await putCompany({
+        await updateCompany(origin, company => ({
           ...company,
           logoChangePending: false,
-          identity: { ...company.identity, logo, logoSHA256 },
-        });
+          identity: {
+            ...company.identity,
+            logo: company.targets.signed.custom?.logo,
+            logoSHA256: company.targets.signed.custom?.logo_sha256,
+          },
+        }));
         setCompanies(await getAllCompanies());
       },
       async removeCompany(origin) {
@@ -490,7 +464,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCompanies(await getAllCompanies());
       },
     }),
-    [companies, refreshNotificationState, syncCompanyNow],
+    [refreshNotificationState, syncCompanyNow],
   );
 
   const value = useMemo(

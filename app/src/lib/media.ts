@@ -7,6 +7,7 @@
 
 import { getMedia, putMedia } from './store';
 import { sha256Hex } from './bytes';
+import { ProtocolError } from './tuf';
 
 const objectUrlCache = new Map<string, string>();
 
@@ -26,7 +27,7 @@ export async function readLimitedBody(res: Response, max: number): Promise<Uint8
   const reader = res.body?.getReader();
   if (!reader) {
     const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length > max) throw new Error(`response is ${bytes.length} bytes, over the ${max}-byte limit`);
+    if (bytes.length > max) throw new ProtocolError(`response is ${bytes.length} bytes, over the ${max}-byte limit`);
     return bytes;
   }
   const chunks: Uint8Array[] = [];
@@ -37,7 +38,7 @@ export async function readLimitedBody(res: Response, max: number): Promise<Uint8
     total += value.length;
     if (total > max) {
       await reader.cancel();
-      throw new Error(`response exceeds the ${max}-byte limit`);
+      throw new ProtocolError(`response exceeds the ${max}-byte limit`);
     }
     chunks.push(value);
   }

@@ -147,10 +147,47 @@ export async function putCompany(company: CompanyRecord): Promise<void> {
   await db.put('companies', company);
 }
 
+export async function updateCompany(
+  origin: string,
+  update: (company: CompanyRecord) => CompanyRecord,
+): Promise<void> {
+  const db = await openAppDb();
+  const tx = db.transaction('companies', 'readwrite');
+  const company = await tx.store.get(origin) as CompanyRecord | undefined;
+  if (company) await tx.store.put(update(company));
+  await tx.done;
+}
+
+/** Discard network results if settings, pairing or another sync changed meanwhile. */
+export async function commitCompanySync(
+  previous: CompanyRecord,
+  next: CompanyRecord,
+  toPut: StoredItem[],
+  toDelete: string[],
+): Promise<boolean> {
+  const db = await openAppDb();
+  const tx = db.transaction(['companies', 'items'], 'readwrite');
+  const companies = tx.objectStore('companies');
+  const current = await companies.get(previous.origin) as CompanyRecord | undefined;
+  if (JSON.stringify(current) !== JSON.stringify(previous)) {
+    await tx.done;
+    return false;
+  }
+  await companies.put(next);
+  const items = tx.objectStore('items');
+  for (const item of toPut) {
+    const cached = await items.get(item.id) as StoredItem | undefined;
+    await items.put({ ...item, read: cached?.read ?? item.read });
+  }
+  for (const id of toDelete) await items.delete(id);
+  await tx.done;
+  return true;
+}
+
 export async function deleteCompany(origin: string): Promise<void> {
   const db = await openAppDb();
-  await db.delete('companies', origin);
-  const tx = db.transaction(['items', 'media'], 'readwrite');
+  const tx = db.transaction(['companies', 'items', 'media'], 'readwrite');
+  await tx.objectStore('companies').delete(origin);
   await deleteByIndex(tx.objectStore('items'), 'by-origin', origin);
   await deleteByIndex(tx.objectStore('media'), 'by-origin', origin);
   await tx.done;

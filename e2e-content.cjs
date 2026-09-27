@@ -53,10 +53,25 @@ function publish(version) {
     });
     const images = [];
     let offline = false;
+    let holdTimestamp = null;
+    function pauseNextSync() {
+      let started;
+      let release;
+      const reached = new Promise(resolve => { started = resolve; });
+      const resume = new Promise(resolve => { release = resolve; });
+      holdTimestamp = { started, resume };
+      return { reached, release };
+    }
     await context.route(`${ORIGIN}/**`, async route => {
       if (offline) return route.abort('internetdisconnected');
       const request = route.request();
       const pathname = new URL(request.url()).pathname;
+      if (holdTimestamp && pathname === '/keryx/timestamp.json') {
+        const hold = holdTimestamp;
+        holdTimestamp = null;
+        hold.started();
+        await hold.resume;
+      }
       const headers = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
       if (pathname.startsWith('/images/')) {
         images.push({ pathname, type: request.resourceType() });
@@ -137,6 +152,54 @@ function publish(version) {
     await page.getByRole('button', { name: 'Refresh', exact: true }).click();
     await page.getByRole('heading', { name: 'Content 5', exact: true }).waitFor();
     console.log('PASS: a rejected replacement drops the old item from display and persistent cache; valid content recovers');
+
+    publish(6);
+    const validSix = fs.readFileSync(target);
+    fs.writeFileSync(target, Buffer.alloc(2 * 1024 * 1024, 120));
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await page.getByText('No messages yet', { exact: true }).waitFor();
+    assert.equal(await page.locator('article').count(), 0, 'oversized replacements must also delete the previous item');
+    fs.writeFileSync(target, validSix);
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await page.getByRole('heading', { name: 'Content 6', exact: true }).waitFor();
+    console.log('PASS: oversized replacement is rejected and the old cached item is removed');
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Images off (privacy)', exact: true }).click();
+    await page.getByRole('button', { name: 'Load images from the web', exact: true }).waitFor();
+    await page.locator('.sheet-backdrop').click({ position: { x: 2, y: 2 } });
+    publish(7);
+    const privacySync = pauseNextSync();
+    await page.reload();
+    await privacySync.reached;
+    await page.getByRole('heading', { name: 'Content 6', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Load images from the web', exact: true }).click();
+    await page.getByRole('button', { name: 'Images off (privacy)', exact: true }).waitFor();
+    privacySync.release();
+    await page.locator('.spin').waitFor({ state: 'hidden' });
+    assert.equal(await page.getByRole('button', { name: 'Images off (privacy)', exact: true }).count(), 1);
+    await page.locator('.sheet-backdrop').click({ position: { x: 2, y: 2 } });
+    images.length = 0;
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await page.getByRole('heading', { name: 'Content 7', exact: true }).waitFor();
+    assert.deepEqual(images, []);
+    console.log('PASS: slow startup sync cannot overwrite a privacy change; a fresh sync respects it');
+
+    publish(8);
+    const removalSync = pauseNextSync();
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await removalSync.reached;
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Remove company', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a company', exact: true }).waitFor();
+    removalSync.release();
+    await page.waitForLoadState('networkidle');
+    await page.reload();
+    await page.getByRole('button', { name: 'Add a company', exact: true }).waitFor();
+    assert.equal(await page.locator('article').count(), 0);
+    console.log('PASS: finishing background sync cannot resurrect a removed company');
     assert.deepEqual(errors, [], 'no uncaught page errors');
   } finally {
     await browser?.close();

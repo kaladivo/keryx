@@ -357,7 +357,9 @@ verified articles. Set `JOIN` to another demo's `join.txt` URL if needed.
 `e2e-content.cjs` checks signed content in WebKit without a push transport:
 image privacy and integrity, HTML sanitization, refresh on launch and foreground,
 offline cache/recovery, and removal of cached items after a failed replacement
-verification. Build the publisher CLI with `make cli`, then run
+verification, including oversized responses. Delayed-response checks ensure sync
+cannot undo privacy changes or restore a removed company. Build the publisher CLI
+with `make cli`, then run
 `APP=http://127.0.0.1:4173 NODE_PATH=<playwright-node-modules> node e2e-content.cjs`.
 It creates temporary signed fixtures and keys outside the checkout. Set `PUB`
 to use a different publisher binary. See [iOS simulator QA](ios/QA.md) for the

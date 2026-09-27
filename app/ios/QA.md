@@ -34,7 +34,9 @@ The checked-in `e2e-content.cjs` repeats the content regressions with real signe
 fixtures in WebKit. It also checks that scripts/forms are removed, inline images
 remain usable, remote images are fetched for verification before rendering, bad
 media hashes prevent display, and rejected cached content stays deleted after an
-offline reload. `e2e-no-push.cjs` covers the unsupported-notification setup flow.
+offline reload. It also rejects oversized replacements and delays responses to
+prove background sync cannot overwrite a privacy change or restore a removed
+company. `e2e-no-push.cjs` covers the unsupported-notification setup flow.
 
 The simulator does not prove optical QR recognition. Test scan success and camera
 presentation/cancellation on a physical iPhone before release. Device signing,
