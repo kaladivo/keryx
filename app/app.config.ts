@@ -55,7 +55,7 @@ const config: ExpoConfig = {
     ['expo-camera', { cameraPermission: 'Scan the company QR code to subscribe to its messages.', recordAudioAndroid: false }],
     'expo-sqlite',
     'expo-web-browser',
-    ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
+    ['expo-build-properties', { ios: { useFrameworks: 'static', enableSceneSupport: true } }],
     './plugins/with-keryx-android',
   ],
 };
