@@ -208,6 +208,18 @@ configuration. `EXPO_PUBLIC_RELAY_URL` and `EXPO_PUBLIC_VAPID_PUBLIC` override t
 local harness build does. Dev and test builds without the variables run without a
 relay (polling is the backstop).
 
+For notifications while running `npm run android` or `npm run ios`, put the
+staging settings in `app/.env.local` (ignored by git), then restart Expo:
+
+```dotenv
+EXPO_PUBLIC_RELAY_URL=https://keryx-relay.fly.dev
+EXPO_PUBLIC_VAPID_PUBLIC=BOJ7j2UTkiGYAKjEs5SiMiKl7UdQAhcKogExGAvbdzX0HE5CX48NS9q9Yo_eOJEhaDfdVUoDf7_dne5ABqd5YYY
+```
+
+Without a relay URL, the native notification self-test reports that notifications
+could not be registered even when the system permission is granted. iOS also
+needs the Firebase and APNs setup described below.
+
 The app then derives the same topic as the relay, registers the installation's
 WebPush subscription, and the service worker verifies each wake-up against the
 topic's exact scope before reconciling content. Local builds that should reach the
