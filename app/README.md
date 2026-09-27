@@ -353,6 +353,36 @@ run `APP=http://127.0.0.1:4173 NODE_PATH=<playwright-node-modules> node e2e-no-p
 It pairs with the signed demo, checks the unavailable state, and continues to
 verified articles. Set `JOIN` to another demo's `join.txt` URL if needed.
 
+### iOS notification setup TODO
+
+Build, launch, pairing and reading verified messages have been tested on the iOS
+simulator without notifications. Push delivery is deferred. Firebase console and
+Apple Developer configuration have not been inspected, so their setup status is
+unknown.
+
+- [ ] Register or locate the iOS app `cz.v1b3coder.keryx` in the shared Firebase
+  project `keryx-f5b5a`, matching the Android configuration and deployed relay.
+- [ ] Download its `GoogleService-Info.plist`, add it to the iOS App target, and
+  include it in the built bundle. See [Firebase Apple setup](https://firebase.google.com/docs/ios/setup).
+- [ ] Configure the Apple App ID and signing profile for Push Notifications.
+  Enable Push Notifications and Background Modes > Remote notifications in
+  Xcode for the App target.
+- [ ] Upload the APNs authentication key to the Firebase project's Cloud
+  Messaging settings with the correct key ID and Apple team ID. Keep the private
+  key outside the repository. See [FCM Apple setup](https://firebase.google.com/docs/cloud-messaging/ios/get-started).
+- [ ] Add Firebase Messaging, initialize Firebase, request notification
+  permission, register with APNs, and connect APNs registration to FCM.
+- [ ] Implement the iOS bridge for topic subscriptions, the nonce-based
+  self-test, and signed wake-up verification with replay protection. Show a local
+  notice only after verification; never send device tokens to the relay. Follow
+  `relay/SPECIFICATION.md` §4 and §6.1 and `design/notifications.md`.
+- [ ] Test real relay → FCM → APNs delivery on a signed physical iPhone build,
+  including foreground/background handling, permission denial, self-test receipt,
+  and rejection of invalid or replayed wake-ups. Check the polling fallback when
+  silent pushes are delayed. [Receiving messages](https://firebase.google.com/docs/cloud-messaging/ios/receive-messages)
+  documents the Apple delivery constraints; a simulator build or injected push
+  alone does not prove this route.
+
 ## Design
 
 Tokens derived from `../GRAPHICAL_DESIGN.md` (Substack-derived: electric blue
