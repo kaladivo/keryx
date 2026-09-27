@@ -364,6 +364,7 @@ export async function syncCompany(
       // per-item size limit (spec/feeds.md §1.1): reject before fetching, abort beyond it
       if (info.length !== undefined && info.length > PUBLIC_ITEM_MAX_BYTES) {
         rejected++;
+        if (existing.delete(key)) toDelete.push(key);
         errors.push(`channel ${channel}: item ${path} is ${info.length} bytes, over the ${PUBLIC_ITEM_MAX_BYTES}-byte limit`);
         continue;
       }
@@ -389,6 +390,7 @@ export async function syncCompany(
       } catch (err) {
         if (err instanceof ProtocolError) {
           rejected++;
+          if (existing.delete(key)) toDelete.push(key);
           errors.push(`channel ${channel}: ${err.message}`);
         } else {
           errors.push(`channel ${channel}: ${err instanceof Error ? err.message : String(err)}`);

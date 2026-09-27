@@ -75,7 +75,7 @@ export function AddCompany({
 
   function handleScan() {
     if (Capacitor.isNativePlatform()) {
-      // Native: MLKit provides its own full-screen camera UI, so there is no
+      // Native scanners provide their own full-screen camera UI, so there is no
       // in-app preview step (and no empty <video> artefact before it).
       void scanQr()
         .then((text) => {

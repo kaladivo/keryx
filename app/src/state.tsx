@@ -232,6 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * state to green without a restart.
    */
   const drainNativeMessages = useCallback(async () => {
+    if (Capacitor.getPlatform() !== 'android') return;
     for (const payload of (await KeryxPush.drainMessages()).messages) {
       await processNativePayload(payload);
     }
@@ -239,7 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     initDebugBuild();
-    void (async () => {
+    const ready = (async () => {
       const list = await getAllCompanies();
       // seed the in-memory item map from the persistent store: syncCompany
       // needs the cached items to detect unpublished (absent) items and to keep
@@ -247,9 +248,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       itemsRef.current = await getAllItems();
       setCompanies(list);
       setLoaded(true);
-      await drainPendingRecoveries();
-      await catchUpOnWakeups();
     })();
+    let refreshing = false;
+    const refreshContent = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        await ready;
+        await drainPendingRecoveries();
+        await drainNativeMessages();
+        for (const company of await getAllCompanies()) {
+          await syncCompanyNow(company.origin);
+        }
+      } finally {
+        refreshing = false;
+      }
+    };
+    void refreshContent();
     void refreshNotificationState();
     void runRelayCheck();
     // the banner re-checks when the app returns to the foreground, so an
@@ -259,9 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState !== 'visible') return;
       void refreshNotificationState();
       void runRelayCheck();
-      void drainPendingRecoveries();
-      void drainNativeMessages();
-      void catchUpOnWakeups();
+      void refreshContent();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
@@ -270,7 +283,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     runRelayCheck,
     drainPendingRecoveries,
     drainNativeMessages,
-    catchUpOnWakeups,
+    syncCompanyNow,
   ]);
 
   // Android wake-ups arrive through the UnifiedPush connector: install the

@@ -1,5 +1,5 @@
 /**
- * QR scanning: native (Capacitor MLKit) on Android/iOS, `BarcodeDetector`
+ * QR scanning: Capacitor Barcode Scanner on iOS, MLKit on Android, `BarcodeDetector`
  * or jsQR on the web. Returns the decoded text (a join URL) or null.
  */
 
@@ -7,6 +7,20 @@ import { Capacitor } from '@capacitor/core';
 import jsQR from 'jsqr';
 
 export async function scanQr(preview?: HTMLVideoElement, signal?: AbortSignal): Promise<string | null> {
+  if (Capacitor.getPlatform() === 'ios') {
+    const { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } = await import('@capacitor/barcode-scanner');
+    try {
+      const { ScanResult } = await CapacitorBarcodeScanner.scanBarcode({
+        hint: CapacitorBarcodeScannerTypeHint.QR_CODE,
+        scanInstructions: 'Scan the company QR code',
+        cancelButtonAccessibilityLabel: 'Cancel scanning',
+      });
+      return ScanResult || null;
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'OS-PLUG-BARC-0006') return null;
+      throw error;
+    }
+  }
   if (Capacitor.isNativePlatform()) {
     try {
       const { BarcodeScanner } = await import('@capacitor-mlkit/barcode-scanning');

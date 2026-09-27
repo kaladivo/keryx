@@ -285,11 +285,13 @@ function FeedArticle({
   const ref = useRef<HTMLElement>(null);
   const [img, setImg] = useState<string | null>(null);
   const item = stored.item;
+  const showImage = company.prefs.loadRemoteMedia || item.image?.startsWith('data:');
 
   useEffect(() => {
     let alive = true;
+    setImg(null);
     const url = item.image;
-    if (!url) return;
+    if (!url || !showImage) return;
     // a linked image is hash-pinned by image_sha256 (spec/feeds.md §1.1)
     void loadImage(url, stored.origin, item.image_sha256).then((objectUrl) => {
       if (alive) setImg(objectUrl);
@@ -297,7 +299,7 @@ function FeedArticle({
     return () => {
       alive = false;
     };
-  }, [item.image, item.image_sha256, stored.origin]);
+  }, [item.image, item.image_sha256, stored.origin, showImage]);
 
   // mark as read when it scrolls into view (no detail view anymore)
   useEffect(() => {
@@ -325,7 +327,7 @@ function FeedArticle({
 
   return (
     <article className="article-card" ref={ref}>
-      {img && <img className="article-img" src={img} alt="" loading="lazy" />}
+      {showImage && img && <img className="article-img" src={img} alt="" loading="lazy" />}
       <div className="article-card-body">
         <h2 className="article-card-title">{item.title ?? 'Untitled'}</h2>
         <div className="article-card-meta">

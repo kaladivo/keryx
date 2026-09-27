@@ -5,7 +5,7 @@
  * domain shown, media hash-verified against `attachments[].sha256` when present.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { domainOf } from '../lib/format';
 import { loadImage } from '../lib/media';
@@ -20,12 +20,21 @@ const ALLOWED_TAGS = [
 const ALLOWED_ATTR = ['href', 'src', 'alt', 'title', 'target', 'rel'];
 
 export function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
+  const content = DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
+    RETURN_DOM: true,
     FORBID_TAGS: ['script', 'style', 'iframe', 'form', 'input', 'button', 'object', 'embed', 'link', 'meta', 'svg', 'math'],
-  });
+  }) as HTMLBodyElement;
+  // Defer remote sources before insertion: removing src in an effect is too late.
+  for (const img of content.querySelectorAll('img[src]')) {
+    const src = img.getAttribute('src') ?? '';
+    if (src.startsWith('data:')) continue;
+    img.setAttribute('data-keryx-src', src);
+    img.removeAttribute('src');
+  }
+  return content.innerHTML;
 }
 
 /** Appends the real destination domain to external links (transparency). */
@@ -55,30 +64,24 @@ export function SanitizedHtml({
   onLinkTap: (url: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [dom, setDom] = useState<string>(() => sanitizeHtml(html));
-
-  useEffect(() => {
-    setDom(sanitizeHtml(html));
-  }, [html]);
+  const dom = useMemo(() => sanitizeHtml(html), [html]);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let alive = true;
     annotateLinks(el);
 
     // media: inline data URLs are covered by the item hash; linked media is
     // loaded only when the user allows remote media, and is hash-verified when an
     // attachment pins its bytes (spec/feeds.md §1.1/§1.4).
-    for (const img of Array.from(el.querySelectorAll('img[src]'))) {
-      const src = img.getAttribute('src') ?? '';
-      if (src.startsWith('data:')) continue; // inline, covered by the item hash
-      if (!loadRemoteMedia) {
-        img.removeAttribute('src'); // remote media disabled by the user
-        continue;
-      }
-      const want = item.attachments?.find((a) => a.url === src)?.sha256;
+    for (const img of Array.from(el.querySelectorAll('img[data-keryx-src]'))) {
+      const src = img.getAttribute('data-keryx-src') ?? '';
       img.removeAttribute('src');
+      if (!loadRemoteMedia) continue;
+      const want = item.attachments?.find((a) => a.url === src)?.sha256;
       void loadImage(src, origin, want).then((objectUrl) => {
+        if (!alive) return;
         if (objectUrl) img.setAttribute('src', objectUrl);
         else img.removeAttribute('src'); // resource unavailable — item unaffected
       });
@@ -94,7 +97,10 @@ export function SanitizedHtml({
       if (href.startsWith('http://') || href.startsWith('https://')) onLinkTap(href);
     };
     el.addEventListener('click', onClick);
-    return () => el.removeEventListener('click', onClick);
+    return () => {
+      alive = false;
+      el.removeEventListener('click', onClick);
+    };
   }, [dom, origin, item, loadRemoteMedia, onLinkTap]);
 
   return (
