@@ -93,7 +93,7 @@ records an unverifiable wake-up for the page instead of refreshing metadata.
 | Android, no transport | no Google services and no UnifiedPush distributor | red top bar + "Install ntfy" (see Transport selection) |
 | Healthy | permission granted, subscription present, registration current | no bar — it is reserved for attention states and the enable flow's tail |
 
-Placement: the **first-company "Turn on notifications" screen** (no skip),
+Placement: the **first-company "Turn on notifications" screen** (no skip when supported),
 then the top bar on the company list, plus a transient per-company marker while
 that company's topics are not yet in the union. The bar is red when wake-ups need
 attention and neutral while a test is in flight; a healthy install shows no bar. The
@@ -108,6 +108,12 @@ After pairing and channel selection, the first company shows a dedicated "Turn o
 notifications" screen before the company view. It is the only prompt surface: the
 tap is the user gesture the browser requires, and timely updates are the point of
 the app, so there is no skip.
+
+When notifications are unsupported, show that limitation with a **Continue**
+button instead of a permission prompt. The user can open the company and check
+for verified messages in the foreground. This does not count as a successful
+notification test. The native iOS shell currently has no push integration and
+uses this path; Firebase/APNs support remains to be implemented.
 
 - CTA tapped → the system/browser prompt appears.
   - granted → progress state, register, self-test (below), green, company view.

@@ -211,7 +211,9 @@ bar: the green "Notifications are working" is only the tail of the enable flow i
 the same session.
 
 After pairing and channel selection, the first company shows a dedicated **"Turn on
-notifications"** screen (no skip — the tap is the user gesture the browser needs).
+notifications"** screen (no skip when supported — the tap is the user gesture the browser needs).
+When notifications are unsupported, it explains the limitation and offers
+**Continue** to open the verified feed.
 Granted → register, self-test, transient green, company view. Denied or dismissed →
 the company view with the red bar and "Check again". A second company with
 permission already granted and the registration current skips the screen and runs the
@@ -329,6 +331,27 @@ that the app consumes SDK-generated content.
   `ios/App/App/Info.plist`.
 - Build the APK: `npm run cap:android` (requires Android SDK; the iOS build
   requires macOS + Xcode).
+- Native iOS notifications are not implemented yet. The shell has no Firebase
+  Messaging integration or APNs registration. It reports notifications as
+  unavailable and lets users continue to verified messages; opening the app
+  checks for updates. A successful simulator build does not prove push delivery.
+- Build for an iOS simulator with `npm run build && npx cap sync ios`, then:
+
+  ```sh
+  xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+    -sdk iphonesimulator -destination 'platform=iOS Simulator,id=<simulator-udid>' \
+    -derivedDataPath /tmp/keryx-ios-build CODE_SIGNING_ALLOWED=NO build
+  xcrun simctl install <simulator-udid> /tmp/keryx-ios-build/Build/Products/Debug-iphonesimulator/App.app
+  xcrun simctl launch <simulator-udid> cz.v1b3coder.keryx
+  ```
+
+  Use a dedicated simulator UDID when other tasks share the machine.
+
+The unsupported-notification regression is `e2e-no-push.cjs` in the repository
+root. With a production build served locally and Playwright's WebKit installed,
+run `APP=http://127.0.0.1:4173 NODE_PATH=<playwright-node-modules> node e2e-no-push.cjs`.
+It pairs with the signed demo, checks the unavailable state, and continues to
+verified articles. Set `JOIN` to another demo's `join.txt` URL if needed.
 
 ## Design
 

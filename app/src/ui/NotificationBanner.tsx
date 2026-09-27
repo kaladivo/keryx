@@ -38,7 +38,7 @@ export function NotificationBanner({
   if (state.kind === 'unsupported') {
     return (
       <div className="banner banner-neutral">
-        Notifications are unavailable in this browser — messages still arrive by polling.
+        Notifications are unavailable on this device. Open the app to check for new messages.
       </div>
     );
   }

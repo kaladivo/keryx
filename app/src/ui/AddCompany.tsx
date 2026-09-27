@@ -473,8 +473,6 @@ function NotificationsScreen({
     return () => clearTimeout(t);
   }, [phase, onDone]);
 
-  // MOCK (UnifiedPush phase): the transport probe runs before this screen, so
-  // the ntfy variants render from the app-wide state, not the enable flow.
   if (notification.kind === 'checking') {
     return (
       <div className="screen screen-pad" style={{ paddingTop: 48 }}>
@@ -485,6 +483,22 @@ function NotificationsScreen({
           <div className="spinner" />
           <p className="t-small t-muted">Checking notifications…</p>
         </div>
+      </div>
+    );
+  }
+  if (notification.kind === 'unsupported') {
+    return (
+      <div className="screen screen-pad" style={{ paddingTop: 48 }}>
+        <h1 className="t-title" style={{ margin: 0 }}>
+          Notifications are unavailable
+        </h1>
+        <p className="t-body t-muted" style={{ margin: '8px 0 12px' }}>
+          This device cannot receive notifications from Keryx. Open the app to check
+          for new messages. Your messages are still verified before you see them.
+        </p>
+        <button className="btn btn-primary" onClick={onDone}>
+          Continue
+        </button>
       </div>
     );
   }
